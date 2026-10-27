@@ -1,4 +1,6 @@
 /*
+ * Modified by nekoy3 on 2026-10-27: configurable UDP mux with TURN-aware default.
+ *
  * Copyright 2026 WaterdogTEAM
  * Licensed under the GNU General Public License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,6 +33,8 @@ import java.util.Locale;
  * as {@code stun:stun.l.google.com:19302}. A proxy behind NAT needs STUN to learn its public
  * address, TURN relays when no direct path exists. TURN credentials go in the URL, as
  * {@code turn:user:password@host:3478}.</li>
+ * <li>{@code waterdog.nethernetIceMux}: multiplexes ICE over one UDP port. Defaults to true unless
+ * {@code waterdog.nethernetIceServers} contains a TURN URL. NXS and hybrid require mux.</li>
  * <li>{@code waterdog.nethernetHandshakeTimeout}: seconds a connection has to finish ICE and DTLS
  * before it is dropped. Defaults to 30.</li>
  * <li>{@code waterdog.nethernetTransportMemory}: seconds a {@code server_type: bedrock} downstream
@@ -61,6 +65,11 @@ import java.util.Locale;
 public final class NetherNetProperties {
 
     public static final List<String> ICE_SERVERS = list(System.getProperty("waterdog.nethernetIceServers", ""));
+    public static final boolean ICE_MUX = Boolean.parseBoolean(System.getProperty("waterdog.nethernetIceMux",
+            Boolean.toString(ICE_SERVERS.stream().noneMatch(url -> {
+                String lower = url.toLowerCase(Locale.ROOT);
+                return lower.startsWith("turn:") || lower.startsWith("turns:");
+            }))));
     public static final int HANDSHAKE_TIMEOUT = Integer.getInteger("waterdog.nethernetHandshakeTimeout", 30);
     public static final int TRANSPORT_MEMORY = Integer.getInteger("waterdog.nethernetTransportMemory", 300);
     public static final int SIGNALING_PORT = Integer.getInteger("waterdog.nethernetSignalingPort", 0);

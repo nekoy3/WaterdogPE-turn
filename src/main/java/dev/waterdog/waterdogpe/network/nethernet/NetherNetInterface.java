@@ -1,4 +1,6 @@
 /*
+ * Modified by nekoy3 on 2026-10-27: TURN without UDP mux; relay-only transport and bounded UDP ports.
+ *
  * Copyright 2026 WaterdogTEAM
  * Licensed under the GNU General Public License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -63,7 +65,8 @@ import java.util.concurrent.CompletableFuture;
  * <p>
  * Signaling is HTTP on TCP, which does not collide with the RakNet UDP bind, so both transports
  * share one advertised port. Media needs its own UDP port while RakNet holds the listener port
- * with SO_REUSEPORT, and every peer is multiplexed over it. See
+ * with SO_REUSEPORT. Peers use either one multiplexed port or ephemeral ports when ICE mux is
+ * disabled. See
  * {@link NetherNetSettings#getWebrtcPort()}.
  */
 @Log4j2
@@ -104,6 +107,12 @@ public class NetherNetInterface implements NetworkInterface, SignalingService {
         if (!primary && mode == SignalingSettings.SignalingMode.NXS) {
             // The provider registered once, with the first listener
             return;
+        }
+
+        boolean iceMux = NetherNetProperties.ICE_MUX;
+        if (!iceMux && mode.nxs()) {
+            log.error("NetherNet NXS signaling requires a fixed WebRTC port, keeping ICE UDP mux enabled");
+            iceMux = true;
         }
 
         List<Integer> mediaPorts = this.bindings.stream().map(Binding::mediaPort).toList();
@@ -163,15 +172,28 @@ public class NetherNetInterface implements NetworkInterface, SignalingService {
                     .option(NetherChannelOption.NETHER_SERVER_METRICS, this.serverMetrics)
                     .childHandler(new NetherNetServerSessionInitializer(this.proxy, null));
             List<URI> iceServers = iceServers();
-            if (!iceServers.isEmpty()) {
-                bootstrap.option(NetherChannelOption.NETHER_PEER_CONNECTION_CONFIG,
-                        PeerConnectionConfiguration.DEFAULT.withIceServers(iceServers));
+            boolean relayOnly = Boolean.getBoolean("waterdog.nethernetRelayOnly");
+            if (relayOnly && (iceServers.isEmpty() || iceMux)) {
+                throw new IllegalStateException("TURN-only requires TURN credentials and disabled UDP mux");
             }
-            // One socket for the media of every peer
-            bootstrap.option(NetherChannelOption.NETHER_SERVER_ICE_ADDRESS,
-                    new InetSocketAddress(address.getAddress(), icePort));
+            if (!iceServers.isEmpty()) {
+                PeerConnectionConfiguration rtc = PeerConnectionConfiguration.DEFAULT.withIceServers(iceServers);
+                if (relayOnly) {
+                    rtc = rtc.iceTransportPolicy(PeerConnectionConfiguration.IceTransportPolicy.RTC_TRANSPORT_POLICY_RELAY)
+                            .withPortRangeBegin(20000).withPortRangeEnd(20999);
+                    log.info("NetherNet TURN-only enabled: ICE policy=relay, local UDP range=20000-20999");
+                }
+                bootstrap.option(NetherChannelOption.NETHER_PEER_CONNECTION_CONFIG, rtc);
+            }
+            if (iceMux) {
+                // One socket for the media of every peer
+                bootstrap.option(NetherChannelOption.NETHER_SERVER_ICE_ADDRESS,
+                        new InetSocketAddress(address.getAddress(), icePort));
+            } else {
+                log.info("NetherNet ICE runs on an ephemeral port per connection, as TURN needs it without UDP mux");
+            }
 
-            // The channel binds signaling over TCP here, media is on icePort
+            // The channel binds signaling over TCP here
             Channel channel = bootstrap.bind(signalingAddress).syncUninterruptibly().channel();
 
             this.bindings.add(new Binding(signaling, channel, !stunServers.isEmpty(), icePort));
@@ -185,14 +207,15 @@ public class NetherNetInterface implements NetworkInterface, SignalingService {
             return;
         }
 
+        String webrtcAddress = iceMux ? "udp/" + icePort : "ephemeral udp ports";
         if (mode.builtin()) {
             // TLS is served on the same port as plaintext, so both schemes reach it when configured
             String scheme = settings.getSignaling().getBuiltin().getHttps().enabled() ? "https and http" : "http";
-            log.info("NetherNet signaling listening on tcp/{} over {}, with WebRTC on udp/{}",
-                    signalingAddress.getPort(), scheme, icePort);
+            log.info("NetherNet signaling listening on tcp/{} over {}, with WebRTC on {}",
+                    signalingAddress.getPort(), scheme, webrtcAddress);
         } else {
             log.info("NetherNet is bound but serves no endpoint, offers must arrive through the signaling API, "
-                    + "with WebRTC on udp/{}", icePort);
+                    + "with WebRTC on {}", webrtcAddress);
         }
     }
 
@@ -242,7 +265,7 @@ public class NetherNetInterface implements NetworkInterface, SignalingService {
                 .setProxyProtocol(settings.isProxyProtocol())
                 .setAdvertisedAddresses(advertisedAddresses(address, settings, !stunServers.isEmpty()))
                 .setStunServers(stunServers)
-                // ICE only runs on webrtc_port, see icePort
+                // ICE uses a separate media socket, not the signaling port
                 .setIceOnLocalPort(false)
                 // A peer may be another proxy signing its own assertion, which no auth service issued
                 .setTokenTrust(TokenTrust.ANY)

@@ -1,4 +1,6 @@
 /*
+ * Modified by nekoy3 on 2026-10-27: downstream version label.
+ *
  * Copyright 2026 WaterdogTEAM
  * Licensed under the GNU General Public License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +25,7 @@ plugins {
 }
 
 group = "dev.waterdog.waterdogpe"
-version = "2.0.4-SNAPSHOT"
+version = "2.0.4-nekoy3-turn-SNAPSHOT"
 description = "Brand new Minecraft: Bedrock Edition proxy created by authors of well-known Waterdog proxy"
 
 java {

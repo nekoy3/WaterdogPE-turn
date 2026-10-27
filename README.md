@@ -1,3 +1,5 @@
+> **Unofficial downstream source copy by nekoy3.** See [DOWNSTREAM-CHANGES.md](DOWNSTREAM-CHANGES.md) for the pinned upstream base, source changes, build instructions, license notes and comparison branches. Original license: GPL-2.0-only.
+
 # WaterdogPE
 [![Build Status](https://github.com/WaterdogPE/WaterdogPE/actions/workflows/maven-build.yml/badge.svg)](https://github.com/WaterdogPE/WaterdogPE/actions?query=branch%3Amaster+is%3Acompleted+event%3Apush)
 [![Discord Chat](https://img.shields.io/discord/767330242078834712.svg)](https://discord.gg/QcRRzXX)
