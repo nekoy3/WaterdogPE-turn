@@ -54,3 +54,12 @@ Source publication follows GPLv2 sections 1–2: retain copyright/license/warran
 ## Review
 
 Compare `upstream-base` with `codex/turn-relay-only` or `main`. The base points to the exact upstream commit above; complete available upstream history is preserved.
+
+## Validation (2026-10-27)
+
+15 selected tests passed with zero failures/errors.
+
+- `dev.waterdog.waterdogpe.network.nethernet.NetherNetPropertiesMuxTest`: 6 tests
+- `dev.waterdog.waterdogpe.utils.config.proxy.ProxyConfigTest`: 9 tests
+
+`shadowJar` compiled successfully locally; the generated JAR is not uploaded.
